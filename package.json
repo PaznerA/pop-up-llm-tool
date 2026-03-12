@@ -4,14 +4,21 @@
   "description": "Agentic LLM tool execution with pop-up browser windows for human-in-the-loop approval",
   "type": "module",
   "main": "src/server.js",
+  "bin": {
+    "pop-up-llm-tool": "src/mcp-server.js",
+    "pop-up-hook": "src/hook.js"
+  },
   "scripts": {
     "start": "node src/server.js",
-    "dev": "node --watch src/server.js"
+    "dev": "node --watch src/server.js",
+    "mcp": "node src/mcp-server.js",
+    "hook:test": "CLAUDE_TOOL_USE_NAME=Bash CLAUDE_TOOL_USE_INPUT='{\"command\":\"ls -la\"}' node src/hook.js"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.39.0",
+    "@modelcontextprotocol/sdk": "^1.12.1",
+    "better-sqlite3": "^11.7.0",
     "express": "^4.21.0",
-    "ws": "^8.18.0",
-    "better-sqlite3": "^11.7.0"
+    "ws": "^8.18.0"
   }
 }

@@ -89,18 +89,76 @@ export const TOOLS = {
 };
 ```
 
+## Integration: Use in Other Projects
+
+There are **three ways** to use the pop-up approval flow. All share the same browser pop-up UI.
+
+### Option A: Standalone (own chat UI)
+
+Run as a self-contained app with its own chat interface and Claude API calls:
+
+```bash
+npm install && ANTHROPIC_API_KEY=sk-ant-... npm start
+```
+
+### Option B: MCP Server (for Claude Code / any MCP client)
+
+Add to your project's `.mcp.json`:
+
+```json
+{
+  "mcpServers": {
+    "pop-up-tools": {
+      "command": "node",
+      "args": ["/absolute/path/to/pop-up-llm-tool/src/mcp-server.js"]
+    }
+  }
+}
+```
+
+When Claude Code calls any registered tool, a browser window opens for approval. The MCP server handles tool execution after approval.
+
+### Option C: Claude Code Hooks (intercept any tool call)
+
+Add to `.claude/settings.json` in your project:
+
+```json
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash|Write|Edit",
+        "command": "node /absolute/path/to/pop-up-llm-tool/src/hook.js"
+      }
+    ]
+  }
+}
+```
+
+This intercepts Claude Code's *own* tools (Bash, Write, Edit, etc.) — every matched action opens a pop-up before Claude Code executes it. Unlike MCP, the hook doesn't execute the tool itself; it only gates whether Claude Code proceeds.
+
+**Key difference:**
+- **MCP** = adds new tools that Claude can call, with pop-up approval + execution
+- **Hooks** = intercepts Claude Code's built-in tools before they run
+
+You can use both together.
+
 ## Project Structure
 
 ```
 src/
-  server.js    Express + WebSocket server
-  agent.js     Claude agent loop with tool-call interception
-  tools.js     Tool definitions + execution logic
+  server.js          Standalone Express + WebSocket server
+  agent.js           Claude agent loop with tool-call interception
+  tools.js           Tool definitions + execution logic
+  mcp-server.js      MCP server (stdio transport)
+  hook.js            Claude Code PreToolUse hook
+  approval-server.js Shared: temp HTTP server that opens browser pop-up
 public/
-  index.html   Main chat UI
-  popup.html   Pop-up approval window
+  index.html         Main chat UI (standalone mode)
+  popup.html         Pop-up window (standalone WebSocket mode)
+  approval.html      Pop-up window (MCP / hooks mode, uses HTTP)
 data/
-  demo.db      Auto-created SQLite demo database
+  demo.db            Auto-created SQLite demo database
 ```
 
 ## Key Design Decisions
@@ -108,7 +166,7 @@ data/
 - **Pop-up windows** (not modals) so the user can compare the tool action with the chat context side-by-side
 - **Manual execution** before approval lets users verify results without committing
 - **Editable inputs** so users can fix AI mistakes before execution
-- **WebSocket** for real-time bidirectional communication between agent and UI
+- **Three integration modes** — standalone, MCP, and hooks — sharing the same approval UX
 - **Extensible tool registry** — add new tools with just a config object
 
 ## License

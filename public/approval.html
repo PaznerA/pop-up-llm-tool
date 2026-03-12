@@ -1,0 +1,367 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Tool Approval</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: #1a1a2e;
+      color: #e0e0e0;
+      padding: 20px;
+      min-height: 100vh;
+    }
+
+    .header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 20px;
+      padding-bottom: 16px;
+      border-bottom: 1px solid #2a2a4a;
+    }
+
+    .icon {
+      width: 40px;
+      height: 40px;
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 20px;
+    }
+
+    .icon.database { background: #1e3a5f; color: #5ba3f5; }
+    .icon.terminal { background: #2d1f3d; color: #b48eda; }
+    .icon.globe    { background: #1f3d2d; color: #5fcf80; }
+    .icon.code     { background: #3d3d1f; color: #dada5f; }
+
+    .header h1 { font-size: 18px; font-weight: 600; }
+    .header .subtitle { font-size: 13px; color: #888; }
+
+    .source-badge {
+      margin-left: auto;
+      font-size: 11px;
+      padding: 3px 10px;
+      border-radius: 12px;
+      font-weight: 600;
+    }
+
+    .source-badge.mcp     { background: #1e3a5f; color: #5ba3f5; }
+    .source-badge.hook    { background: #2d1f3d; color: #b48eda; }
+
+    .purpose {
+      background: #16213e;
+      border-left: 3px solid #5ba3f5;
+      padding: 12px 16px;
+      margin-bottom: 20px;
+      border-radius: 0 8px 8px 0;
+      font-size: 14px;
+      line-height: 1.5;
+    }
+
+    label {
+      display: block;
+      font-size: 12px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: #888;
+      margin-bottom: 6px;
+    }
+
+    textarea {
+      width: 100%;
+      min-height: 120px;
+      background: #0d1117;
+      color: #c9d1d9;
+      border: 1px solid #30363d;
+      border-radius: 8px;
+      padding: 12px;
+      font-family: "Fira Code", "Cascadia Code", "JetBrains Mono", monospace;
+      font-size: 14px;
+      line-height: 1.6;
+      resize: vertical;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+
+    textarea:focus { border-color: #5ba3f5; }
+
+    .actions {
+      display: flex;
+      gap: 10px;
+      margin-top: 16px;
+    }
+
+    button {
+      padding: 10px 20px;
+      border: none;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: opacity 0.2s, transform 0.1s;
+    }
+
+    button:hover { opacity: 0.9; }
+    button:active { transform: scale(0.98); }
+
+    .btn-run     { background: #1f6feb; color: #fff; }
+    .btn-approve { background: #238636; color: #fff; }
+    .btn-reject  { background: #da3633; color: #fff; }
+
+    .btn-run:disabled, .btn-approve:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    .result-section { margin-top: 20px; }
+
+    .result-box {
+      background: #0d1117;
+      border: 1px solid #30363d;
+      border-radius: 8px;
+      padding: 12px;
+      font-family: monospace;
+      font-size: 13px;
+      line-height: 1.5;
+      max-height: 300px;
+      overflow-y: auto;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+
+    .result-box.success { border-color: #238636; }
+    .result-box.error   { border-color: #da3633; }
+
+    .status {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 12px;
+      margin-bottom: 8px;
+    }
+
+    .status .dot {
+      width: 8px; height: 8px; border-radius: 50%;
+    }
+
+    .status .dot.pending  { background: #d29922; }
+    .status .dot.running  { background: #1f6feb; animation: pulse 1s infinite; }
+    .status .dot.done     { background: #238636; }
+    .status .dot.rejected { background: #da3633; }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.4; }
+    }
+
+    .spacer { flex: 1; }
+
+    .done-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.7);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 100;
+    }
+
+    .done-overlay .msg {
+      background: #161b22;
+      border: 1px solid #30363d;
+      padding: 24px 40px;
+      border-radius: 12px;
+      font-size: 16px;
+      font-weight: 600;
+      text-align: center;
+    }
+
+    .done-overlay .msg.approved { border-color: #238636; color: #3fb950; }
+    .done-overlay .msg.rejected { border-color: #da3633; color: #f85149; }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <div class="icon" id="toolIcon"></div>
+    <div>
+      <h1 id="toolTitle">Tool Approval</h1>
+      <div class="subtitle" id="toolSubtitle"></div>
+    </div>
+    <span class="source-badge" id="sourceBadge"></span>
+  </div>
+
+  <div class="purpose" id="purpose"></div>
+
+  <label id="fieldLabel">Input</label>
+  <textarea id="toolInput" spellcheck="false"></textarea>
+
+  <div class="actions">
+    <button class="btn-run" id="btnRun">Run Manually</button>
+    <div class="spacer"></div>
+    <button class="btn-approve" id="btnApprove">Approve &amp; Continue</button>
+    <button class="btn-reject" id="btnReject">Reject</button>
+  </div>
+
+  <div class="result-section" id="resultSection" style="display:none">
+    <div class="status">
+      <span class="dot" id="statusDot"></span>
+      <span id="statusText"></span>
+    </div>
+    <label>Result</label>
+    <div class="result-box" id="resultBox"></div>
+  </div>
+
+  <script>
+    const ICONS = {
+      database: "&#128451;",
+      terminal: "&#9000;",
+      globe: "&#127760;",
+      code: "&#128187;",
+    };
+
+    let data = {};
+    let editableKey = null;
+    let lastManualResult = undefined;
+    const baseUrl = window.location.origin;
+
+    // Load data from the approval server
+    async function init() {
+      const resp = await fetch(`${baseUrl}/data`);
+      data = await resp.json();
+      const { toolName, toolInput, popup } = data;
+
+      // Icon
+      const iconEl = document.getElementById("toolIcon");
+      iconEl.innerHTML = ICONS[popup?.icon] || "&#128295;";
+      iconEl.className = `icon ${popup?.icon || ""}`;
+
+      // Title
+      document.getElementById("toolTitle").textContent = popup?.title || toolName;
+      document.getElementById("toolSubtitle").textContent =
+        popup?.description || "The AI wants to use a tool";
+
+      // Source badge
+      const badge = document.getElementById("sourceBadge");
+      const source = new URLSearchParams(location.search).get("source") || "mcp";
+      badge.textContent = source.toUpperCase();
+      badge.className = `source-badge ${source}`;
+
+      // Purpose
+      const purpose = toolInput.purpose || toolInput.description || "No reason provided";
+      document.getElementById("purpose").textContent = purpose;
+
+      // Editable field
+      editableKey = Object.keys(toolInput).find(
+        (k) => k !== "purpose" && k !== "description" && k !== "method"
+      );
+      const editableValue = editableKey
+        ? toolInput[editableKey]
+        : JSON.stringify(toolInput, null, 2);
+      document.getElementById("fieldLabel").textContent =
+        popup?.fieldLabel || editableKey || "Input";
+      const ta = document.getElementById("toolInput");
+      ta.value = editableValue;
+      ta.style.height = Math.max(120, Math.min(ta.scrollHeight + 4, 400)) + "px";
+    }
+
+    // --- Run Manually ---
+    document.getElementById("btnRun").addEventListener("click", async () => {
+      const input = buildModifiedInput();
+      setStatus("running", "Running...");
+      document.getElementById("resultSection").style.display = "block";
+      document.getElementById("resultBox").textContent = "";
+      document.getElementById("btnRun").disabled = true;
+
+      try {
+        const resp = await fetch(`${baseUrl}/execute`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ input }),
+        });
+        const result = await resp.json();
+        lastManualResult = result;
+        const isError = !result.success;
+        document.getElementById("resultBox").className =
+          `result-box ${isError ? "error" : "success"}`;
+        document.getElementById("resultBox").textContent = formatResult(result);
+        setStatus(isError ? "rejected" : "done", isError ? "Error" : "Success");
+      } catch (err) {
+        document.getElementById("resultBox").className = "result-box error";
+        document.getElementById("resultBox").textContent = err.message;
+        setStatus("rejected", "Error");
+      }
+      document.getElementById("btnRun").disabled = false;
+    });
+
+    // --- Approve ---
+    document.getElementById("btnApprove").addEventListener("click", async () => {
+      const modifiedInput = buildModifiedInput();
+      await fetch(`${baseUrl}/decide`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          approved: true,
+          modifiedInput,
+          manualResult: lastManualResult,
+        }),
+      });
+      showDone("approved", "Approved — sent back to AI");
+    });
+
+    // --- Reject ---
+    document.getElementById("btnReject").addEventListener("click", async () => {
+      const reason = prompt("Reason for rejection (optional):") || "";
+      await fetch(`${baseUrl}/decide`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ approved: false, reason }),
+      });
+      showDone("rejected", "Rejected");
+    });
+
+    function buildModifiedInput() {
+      const edited = document.getElementById("toolInput").value;
+      const input = { ...data.toolInput };
+      if (editableKey) {
+        input[editableKey] = edited;
+      }
+      return input;
+    }
+
+    function setStatus(state, text) {
+      document.getElementById("statusDot").className = `dot ${state}`;
+      document.getElementById("statusText").textContent = text;
+    }
+
+    function showDone(status, text) {
+      const overlay = document.createElement("div");
+      overlay.className = "done-overlay";
+      overlay.innerHTML = `<div class="msg ${status}">${text}</div>`;
+      document.body.appendChild(overlay);
+      setTimeout(() => window.close(), 1200);
+    }
+
+    function formatResult(result) {
+      if (result.rows) {
+        if (result.rows.length === 0) return "(no rows returned)";
+        const cols = Object.keys(result.rows[0]);
+        const header = cols.join(" | ");
+        const sep = cols.map((c) => "-".repeat(c.length)).join("-+-");
+        const rows = result.rows.map((r) =>
+          cols.map((c) => String(r[c] ?? "")).join(" | ")
+        );
+        return `${header}\n${sep}\n${rows.join("\n")}\n\n(${result.rowCount} row${result.rowCount !== 1 ? "s" : ""})`;
+      }
+      if (result.output !== undefined) {
+        return result.output || "(no output)";
+      }
+      return JSON.stringify(result, null, 2);
+    }
+
+    init();
+  </script>
+</body>
+</html>
