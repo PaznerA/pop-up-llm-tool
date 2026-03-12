@@ -1,0 +1,17 @@
+{
+  "name": "pop-up-llm-tool",
+  "version": "1.0.0",
+  "description": "Agentic LLM tool execution with pop-up browser windows for human-in-the-loop approval",
+  "type": "module",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "node --watch src/server.js"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.39.0",
+    "express": "^4.21.0",
+    "ws": "^8.18.0",
+    "better-sqlite3": "^11.7.0"
+  }
+}
