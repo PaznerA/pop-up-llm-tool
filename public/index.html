@@ -1,0 +1,393 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Pop-up LLM Tool</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: #0d1117;
+      color: #c9d1d9;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .topbar {
+      background: #161b22;
+      border-bottom: 1px solid #30363d;
+      padding: 12px 20px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .topbar h1 {
+      font-size: 16px;
+      font-weight: 600;
+    }
+
+    .topbar .badge {
+      background: #238636;
+      color: #fff;
+      font-size: 11px;
+      padding: 2px 8px;
+      border-radius: 12px;
+      font-weight: 600;
+    }
+
+    .chat {
+      flex: 1;
+      overflow-y: auto;
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .message {
+      max-width: 720px;
+      line-height: 1.6;
+      font-size: 14px;
+    }
+
+    .message.user {
+      align-self: flex-end;
+      background: #1f6feb;
+      color: #fff;
+      padding: 10px 16px;
+      border-radius: 16px 16px 4px 16px;
+    }
+
+    .message.assistant {
+      align-self: flex-start;
+      background: #161b22;
+      border: 1px solid #30363d;
+      padding: 12px 16px;
+      border-radius: 4px 16px 16px 16px;
+      white-space: pre-wrap;
+    }
+
+    .message.tool-event {
+      align-self: center;
+      background: #1a1a2e;
+      border: 1px solid #2a2a4a;
+      padding: 8px 16px;
+      border-radius: 8px;
+      font-size: 12px;
+      color: #888;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .message.tool-event .dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+    }
+
+    .message.tool-event .dot.pending  { background: #d29922; }
+    .message.tool-event .dot.approved { background: #238636; }
+    .message.tool-event .dot.rejected { background: #da3633; }
+
+    .input-bar {
+      background: #161b22;
+      border-top: 1px solid #30363d;
+      padding: 16px 20px;
+      display: flex;
+      gap: 10px;
+    }
+
+    .input-bar input {
+      flex: 1;
+      background: #0d1117;
+      border: 1px solid #30363d;
+      border-radius: 8px;
+      padding: 10px 14px;
+      color: #c9d1d9;
+      font-size: 14px;
+      outline: none;
+    }
+
+    .input-bar input:focus {
+      border-color: #1f6feb;
+    }
+
+    .input-bar input::placeholder {
+      color: #484f58;
+    }
+
+    .input-bar button {
+      background: #238636;
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      padding: 10px 20px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+
+    .input-bar button:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    .input-bar button:hover:not(:disabled) {
+      background: #2ea043;
+    }
+
+    .typing {
+      display: inline-flex;
+      gap: 4px;
+      padding: 4px 0;
+    }
+
+    .typing span {
+      width: 6px;
+      height: 6px;
+      background: #484f58;
+      border-radius: 50%;
+      animation: bounce 1.4s infinite;
+    }
+
+    .typing span:nth-child(2) { animation-delay: 0.2s; }
+    .typing span:nth-child(3) { animation-delay: 0.4s; }
+
+    @keyframes bounce {
+      0%, 80%, 100% { transform: translateY(0); }
+      40% { transform: translateY(-6px); }
+    }
+
+    .hint {
+      text-align: center;
+      color: #484f58;
+      font-size: 13px;
+      padding: 40px 20px;
+    }
+
+    .hint strong { color: #888; }
+
+    .error-msg {
+      background: #3d1416;
+      border: 1px solid #da3633;
+      color: #f85149;
+      padding: 10px 16px;
+      border-radius: 8px;
+      font-size: 13px;
+      align-self: center;
+    }
+  </style>
+</head>
+<body>
+  <div class="topbar">
+    <h1>Pop-up LLM Tool</h1>
+    <span class="badge">Agent</span>
+  </div>
+
+  <div class="chat" id="chat">
+    <div class="hint">
+      Chat with the AI assistant. When it needs to run a tool (SQL query, shell command, etc.),
+      a <strong>pop-up window</strong> will open for you to review, edit, and approve.<br><br>
+      Try: <strong>"Show me all users in the database"</strong> or <strong>"How many orders are pending?"</strong>
+    </div>
+  </div>
+
+  <div class="input-bar">
+    <input type="text" id="userInput" placeholder="Ask the AI something..." autofocus />
+    <button id="sendBtn">Send</button>
+  </div>
+
+  <script>
+    const chat = document.getElementById("chat");
+    const userInput = document.getElementById("userInput");
+    const sendBtn = document.getElementById("sendBtn");
+
+    let ws;
+    let connected = false;
+    let currentAssistantBubble = null;
+
+    function connect() {
+      const proto = location.protocol === "https:" ? "wss:" : "ws:";
+      ws = new WebSocket(`${proto}//${location.host}/ws`);
+
+      ws.addEventListener("open", () => {
+        connected = true;
+        sendBtn.disabled = false;
+      });
+
+      ws.addEventListener("close", () => {
+        connected = false;
+        sendBtn.disabled = true;
+        addSystemMessage("Disconnected. Reconnecting...");
+        setTimeout(connect, 2000);
+      });
+
+      ws.addEventListener("message", (event) => {
+        const msg = JSON.parse(event.data);
+
+        if (msg.type === "assistant_text") {
+          if (!currentAssistantBubble) {
+            currentAssistantBubble = addMessage("assistant", "");
+          }
+          currentAssistantBubble.textContent += msg.text;
+          scrollToBottom();
+        }
+
+        if (msg.type === "tool_request") {
+          openToolPopup(msg);
+          addToolEvent(msg.popup?.title || msg.toolName, "pending", msg.requestId);
+        }
+
+        if (msg.type === "turn_complete") {
+          currentAssistantBubble = null;
+          sendBtn.disabled = false;
+          userInput.disabled = false;
+          userInput.focus();
+        }
+
+        if (msg.type === "error") {
+          addMessage("error-msg", msg.message);
+          currentAssistantBubble = null;
+          sendBtn.disabled = false;
+          userInput.disabled = false;
+        }
+      });
+    }
+
+    function send() {
+      const text = userInput.value.trim();
+      if (!text || !connected) return;
+
+      addMessage("user", text);
+      ws.send(JSON.stringify({ type: "chat", text }));
+      userInput.value = "";
+      sendBtn.disabled = true;
+      userInput.disabled = true;
+      currentAssistantBubble = null;
+    }
+
+    sendBtn.addEventListener("click", send);
+    userInput.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" && !e.shiftKey) {
+        e.preventDefault();
+        send();
+      }
+    });
+
+    function addMessage(cls, text) {
+      // Remove the hint on first message
+      const hint = chat.querySelector(".hint");
+      if (hint) hint.remove();
+
+      const el = document.createElement("div");
+      el.className = `message ${cls}`;
+      el.textContent = text;
+      chat.appendChild(el);
+      scrollToBottom();
+      return el;
+    }
+
+    function addToolEvent(title, status, requestId) {
+      const el = document.createElement("div");
+      el.className = "message tool-event";
+      el.id = `tool-event-${requestId}`;
+      el.innerHTML = `<span class="dot ${status}"></span> Tool: <strong>${title}</strong> — waiting for approval`;
+      chat.appendChild(el);
+      scrollToBottom();
+      return el;
+    }
+
+    function updateToolEvent(requestId, status, label) {
+      const el = document.getElementById(`tool-event-${requestId}`);
+      if (el) {
+        const dot = el.querySelector(".dot");
+        dot.className = `dot ${status}`;
+        el.innerHTML = `<span class="dot ${status}"></span> Tool: <strong>${label}</strong> — ${status}`;
+      }
+    }
+
+    function addSystemMessage(text) {
+      const el = document.createElement("div");
+      el.className = "message tool-event";
+      el.textContent = text;
+      chat.appendChild(el);
+      scrollToBottom();
+    }
+
+    function scrollToBottom() {
+      chat.scrollTop = chat.scrollHeight;
+    }
+
+    // --- Pop-up management ---
+
+    function openToolPopup(msg) {
+      const popupData = JSON.stringify({
+        requestId: msg.requestId,
+        toolName: msg.toolName,
+        toolInput: msg.toolInput,
+        popup: msg.popup,
+      });
+
+      const popup = window.open(
+        "/popup.html",
+        popupData, // window.name — used to pass data
+        "width=600,height=550,resizable=yes,scrollbars=yes"
+      );
+
+      if (!popup) {
+        alert("Pop-up blocked! Please allow pop-ups for this site.");
+      }
+    }
+
+    // Listen for messages from pop-up windows
+    window.addEventListener("message", (event) => {
+      if (event.origin !== location.origin) return;
+      const msg = event.data;
+
+      if (msg.type === "tool_response") {
+        // Forward to WebSocket
+        ws.send(JSON.stringify(msg));
+        updateToolEvent(
+          msg.requestId,
+          msg.approved ? "approved" : "rejected",
+          msg.approved ? "Approved" : "Rejected"
+        );
+      }
+
+      if (msg.type === "manual_execute") {
+        // Forward manual execution request to WebSocket
+        ws.send(JSON.stringify(msg));
+      }
+    });
+
+    // Forward manual results from WebSocket to the pop-up
+    // (Handled inside ws.onmessage — the pop-up listens for postMessage from parent)
+    const origOnMessage = ws ? ws.onmessage : null;
+
+    // We need to intercept manual_result messages and forward to pop-ups
+    // This is handled via a MutationObserver-like pattern on ws
+    function setupManualResultForwarding() {
+      const origHandler = ws.onmessage;
+      ws.addEventListener("message", (event) => {
+        const msg = JSON.parse(event.data);
+        if (msg.type === "manual_result") {
+          // Broadcast to all child windows — they filter by requestId
+          // We can't easily track pop-up references, so we use BroadcastChannel
+          const bc = new BroadcastChannel("popup-results");
+          bc.postMessage(msg);
+          bc.close();
+        }
+      });
+    }
+
+    connect();
+    // After connection, set up forwarding
+    setTimeout(setupManualResultForwarding, 500);
+  </script>
+</body>
+</html>

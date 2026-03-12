@@ -1,0 +1,351 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Tool Approval</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: #1a1a2e;
+      color: #e0e0e0;
+      padding: 20px;
+      min-height: 100vh;
+    }
+
+    .header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 20px;
+      padding-bottom: 16px;
+      border-bottom: 1px solid #2a2a4a;
+    }
+
+    .icon {
+      width: 40px;
+      height: 40px;
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 20px;
+    }
+
+    .icon.database { background: #1e3a5f; color: #5ba3f5; }
+    .icon.terminal { background: #2d1f3d; color: #b48eda; }
+    .icon.globe    { background: #1f3d2d; color: #5fcf80; }
+
+    .header h1 {
+      font-size: 18px;
+      font-weight: 600;
+    }
+
+    .header .subtitle {
+      font-size: 13px;
+      color: #888;
+    }
+
+    .purpose {
+      background: #16213e;
+      border-left: 3px solid #5ba3f5;
+      padding: 12px 16px;
+      margin-bottom: 20px;
+      border-radius: 0 8px 8px 0;
+      font-size: 14px;
+      line-height: 1.5;
+    }
+
+    label {
+      display: block;
+      font-size: 12px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: #888;
+      margin-bottom: 6px;
+    }
+
+    textarea {
+      width: 100%;
+      min-height: 120px;
+      background: #0d1117;
+      color: #c9d1d9;
+      border: 1px solid #30363d;
+      border-radius: 8px;
+      padding: 12px;
+      font-family: "Fira Code", "Cascadia Code", "JetBrains Mono", monospace;
+      font-size: 14px;
+      line-height: 1.6;
+      resize: vertical;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+
+    textarea:focus {
+      border-color: #5ba3f5;
+    }
+
+    .actions {
+      display: flex;
+      gap: 10px;
+      margin-top: 16px;
+    }
+
+    button {
+      padding: 10px 20px;
+      border: none;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: opacity 0.2s, transform 0.1s;
+    }
+
+    button:hover { opacity: 0.9; }
+    button:active { transform: scale(0.98); }
+
+    .btn-run {
+      background: #1f6feb;
+      color: #fff;
+    }
+
+    .btn-approve {
+      background: #238636;
+      color: #fff;
+    }
+
+    .btn-reject {
+      background: #da3633;
+      color: #fff;
+    }
+
+    .btn-run:disabled, .btn-approve:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    .result-section {
+      margin-top: 20px;
+    }
+
+    .result-box {
+      background: #0d1117;
+      border: 1px solid #30363d;
+      border-radius: 8px;
+      padding: 12px;
+      font-family: monospace;
+      font-size: 13px;
+      line-height: 1.5;
+      max-height: 300px;
+      overflow-y: auto;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+
+    .result-box.success { border-color: #238636; }
+    .result-box.error   { border-color: #da3633; }
+
+    .status {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 12px;
+      margin-bottom: 8px;
+    }
+
+    .status .dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+    }
+
+    .status .dot.pending  { background: #d29922; }
+    .status .dot.running  { background: #1f6feb; animation: pulse 1s infinite; }
+    .status .dot.done     { background: #238636; }
+    .status .dot.rejected { background: #da3633; }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.4; }
+    }
+
+    .spacer { flex: 1; }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <div class="icon" id="toolIcon"></div>
+    <div>
+      <h1 id="toolTitle">Tool Approval</h1>
+      <div class="subtitle" id="toolSubtitle"></div>
+    </div>
+  </div>
+
+  <div class="purpose" id="purpose"></div>
+
+  <label id="fieldLabel">Input</label>
+  <textarea id="toolInput" spellcheck="false"></textarea>
+
+  <div class="actions">
+    <button class="btn-run" id="btnRun">Run Manually</button>
+    <div class="spacer"></div>
+    <button class="btn-approve" id="btnApprove">Approve &amp; Send to AI</button>
+    <button class="btn-reject" id="btnReject">Reject</button>
+  </div>
+
+  <div class="result-section" id="resultSection" style="display:none">
+    <div class="status">
+      <span class="dot" id="statusDot"></span>
+      <span id="statusText"></span>
+    </div>
+    <label>Result</label>
+    <div class="result-box" id="resultBox"></div>
+  </div>
+
+  <script>
+    // Data is passed via window.name (JSON) from the parent window
+    const data = JSON.parse(window.name || "{}");
+    const { requestId, toolName, toolInput, popup } = data;
+    const parentOrigin = window.location.origin;
+
+    // Icons
+    const ICONS = {
+      database: "&#128451;",
+      terminal: "&#9000;",
+      globe: "&#127760;",
+    };
+
+    // Populate UI
+    const iconEl = document.getElementById("toolIcon");
+    iconEl.innerHTML = ICONS[popup?.icon] || "&#128295;";
+    iconEl.className = `icon ${popup?.icon || ""}`;
+
+    document.getElementById("toolTitle").textContent = popup?.title || toolName;
+    document.getElementById("toolSubtitle").textContent =
+      popup?.description || "The AI wants to use a tool";
+
+    // Show purpose
+    const purposeField =
+      toolInput.purpose || toolInput.description || "No reason provided";
+    document.getElementById("purpose").textContent = purposeField;
+
+    // Determine the main editable field
+    const editableKey = Object.keys(toolInput).find((k) => k !== "purpose" && k !== "description" && k !== "method");
+    const editableValue = editableKey ? toolInput[editableKey] : JSON.stringify(toolInput, null, 2);
+    document.getElementById("fieldLabel").textContent = popup?.fieldLabel || editableKey || "Input";
+    document.getElementById("toolInput").value = editableValue;
+
+    let lastManualResult = undefined;
+
+    // --- Run Manually ---
+    document.getElementById("btnRun").addEventListener("click", async () => {
+      const input = buildModifiedInput();
+      setStatus("running", "Running...");
+      document.getElementById("resultSection").style.display = "block";
+      document.getElementById("resultBox").textContent = "";
+      document.getElementById("btnRun").disabled = true;
+
+      // Send manual_execute to server via parent
+      window.opener.postMessage(
+        { type: "manual_execute", requestId, toolName, input },
+        parentOrigin
+      );
+    });
+
+    // Listen for manual execution results from parent (via postMessage)
+    window.addEventListener("message", (event) => {
+      if (event.data?.type === "manual_result" && event.data.requestId === requestId) {
+        handleManualResult(event.data.result);
+      }
+    });
+
+    // Also listen via BroadcastChannel (fallback)
+    const bc = new BroadcastChannel("popup-results");
+    bc.onmessage = (event) => {
+      if (event.data?.type === "manual_result" && event.data.requestId === requestId) {
+        handleManualResult(event.data.result);
+      }
+    };
+
+    function handleManualResult(result) {
+      lastManualResult = result;
+      const isError = !result.success;
+      document.getElementById("resultBox").className = `result-box ${isError ? "error" : "success"}`;
+      document.getElementById("resultBox").textContent = formatResult(result);
+      setStatus(isError ? "rejected" : "done", isError ? "Error" : "Success");
+      document.getElementById("btnRun").disabled = false;
+    }
+
+    // --- Approve ---
+    document.getElementById("btnApprove").addEventListener("click", () => {
+      const modifiedInput = buildModifiedInput();
+      window.opener.postMessage(
+        {
+          type: "tool_response",
+          requestId,
+          approved: true,
+          modifiedInput,
+          manualResult: lastManualResult,
+        },
+        parentOrigin
+      );
+      setStatus("done", "Approved — sent to AI");
+      disableAll();
+      setTimeout(() => window.close(), 600);
+    });
+
+    // --- Reject ---
+    document.getElementById("btnReject").addEventListener("click", () => {
+      const reason = prompt("Reason for rejection (optional):") || "";
+      window.opener.postMessage(
+        { type: "tool_response", requestId, approved: false, reason },
+        parentOrigin
+      );
+      setStatus("rejected", "Rejected");
+      disableAll();
+      setTimeout(() => window.close(), 600);
+    });
+
+    function buildModifiedInput() {
+      const edited = document.getElementById("toolInput").value;
+      const input = { ...toolInput };
+      if (editableKey) {
+        input[editableKey] = edited;
+      }
+      return input;
+    }
+
+    function setStatus(state, text) {
+      document.getElementById("statusDot").className = `dot ${state}`;
+      document.getElementById("statusText").textContent = text;
+    }
+
+    function disableAll() {
+      document.getElementById("btnRun").disabled = true;
+      document.getElementById("btnApprove").disabled = true;
+      document.getElementById("btnReject").disabled = true;
+      document.getElementById("toolInput").readOnly = true;
+    }
+
+    function formatResult(result) {
+      if (result.rows) {
+        if (result.rows.length === 0) return "(no rows returned)";
+        // Format as simple table
+        const cols = Object.keys(result.rows[0]);
+        const header = cols.join(" | ");
+        const sep = cols.map((c) => "-".repeat(c.length)).join("-+-");
+        const rows = result.rows.map((r) => cols.map((c) => String(r[c] ?? "")).join(" | "));
+        return `${header}\n${sep}\n${rows.join("\n")}\n\n(${result.rowCount} row${result.rowCount !== 1 ? "s" : ""})`;
+      }
+      return JSON.stringify(result, null, 2);
+    }
+
+    // Auto-resize textarea
+    const ta = document.getElementById("toolInput");
+    ta.style.height = Math.max(120, Math.min(ta.scrollHeight + 4, 400)) + "px";
+  </script>
+</body>
+</html>
